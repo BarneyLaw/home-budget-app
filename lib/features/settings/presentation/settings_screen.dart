@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../budget/application/budget_state.dart';
+import '../../transactions/application/transaction_csv_exporter.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -51,18 +52,19 @@ class SettingsScreen extends ConsumerWidget {
           ),
           _SettingsGroup(
             title: 'Privacy',
-            children: const [
-              ListTile(
+            children: [
+              const ListTile(
                 leading: Icon(Icons.lock_outline),
                 title: Text('App lock'),
                 trailing: Icon(Icons.chevron_right),
               ),
               ListTile(
-                leading: Icon(Icons.file_download_outlined),
-                title: Text('Export CSV'),
-                trailing: Icon(Icons.chevron_right),
+                leading: const Icon(Icons.file_download_outlined),
+                title: const Text('Export CSV'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showCsvExport(context, state),
               ),
-              ListTile(
+              const ListTile(
                 leading: Icon(Icons.delete_outline),
                 title: Text('Delete local data'),
                 trailing: Icon(Icons.chevron_right),
@@ -71,6 +73,33 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showCsvExport(BuildContext context, BudgetState state) {
+    final csv = const TransactionCsvExporter().export(
+      transactions: state.transactions,
+      categories: state.categories,
+    );
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('CSV export'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: SelectableText(csv),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

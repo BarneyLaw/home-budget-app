@@ -15,6 +15,8 @@ and show a safe-to-spend number before charts.
 - Demo notification capture pipeline with confidence scoring and duplicate
   handling.
 - Basic recurring payment detection and actionable insights.
+- CSV export generation from the transaction ledger.
+- Dart platform-channel contract for Android notification listener integration.
 
 ## Project Layout
 

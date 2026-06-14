@@ -16,6 +16,10 @@ MVP described in `flutter_budget_app_architecture.md`.
 - Duplicate-aware capture simulation.
 - Basic recurring payment detection.
 - Basic spending insights for small purchases and subscriptions.
+- CSV export generation from the local transaction ledger.
+- Repository interfaces for the future Drift-backed budget and transaction
+  stores.
+- Dart `MethodChannel`/`EventChannel` contract for Android notification capture.
 - Feature-first folder structure aligned with the architecture brief.
 
 ## Current Data Layer
@@ -37,5 +41,5 @@ core budgeting, parsing, and capture logic.
 2. Install dependencies with `flutter pub get`.
 3. Run `flutter analyze` and `flutter test`.
 4. Replace the in-memory state with Drift tables and repositories.
-5. Add the Android notification listener plugin and connect it to the capture
-   pipeline.
+5. Add native Android `NotificationListenerService` code that emits events over
+   `pocket_pulse/notifications`.
