@@ -51,6 +51,21 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           _SettingsGroup(
+            title: 'Rules',
+            children: [
+              for (final rule in state.rules)
+                ListTile(
+                  leading: Icon(
+                    rule.enabled
+                        ? Icons.auto_fix_high_outlined
+                        : Icons.block_outlined,
+                  ),
+                  title: Text(rule.name),
+                  subtitle: Text('Priority ${rule.priority}'),
+                ),
+            ],
+          ),
+          _SettingsGroup(
             title: 'Privacy',
             children: [
               const ListTile(

@@ -12,8 +12,10 @@ MVP described in `flutter_budget_app_architecture.md`.
   `paid alex 20 dinner`.
 - Transaction timeline with search and status filters.
 - Review inbox actions: confirm, ignore, and mark as transfer.
+- Review inbox rule creation for merchant-category learning.
 - Deterministic notification parsing demo for bank-style alerts.
 - Duplicate-aware capture simulation.
+- Seeded rules and rule application for new manual/captured transactions.
 - Basic recurring payment detection.
 - Basic spending insights for small purchases and subscriptions.
 - CSV export generation from the local transaction ledger.

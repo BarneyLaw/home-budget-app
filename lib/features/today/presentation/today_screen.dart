@@ -207,20 +207,31 @@ class _ReviewTile extends ConsumerWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 10),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 FilledButton.icon(
                   icon: const Icon(Icons.check),
                   label: const Text('Confirm'),
                   onPressed: () => controller.confirmTransaction(transaction.id),
                 ),
-                const SizedBox(width: 8),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.swap_horiz),
                   label: const Text('Transfer'),
                   onPressed: () => controller.markAsTransfer(transaction.id),
                 ),
-                const Spacer(),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.auto_fix_high_outlined),
+                  label: const Text('Rule'),
+                  onPressed: () {
+                    controller.createRuleFromTransaction(transaction.id);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Rule created')),
+                    );
+                  },
+                ),
                 IconButton(
                   tooltip: 'Ignore',
                   icon: const Icon(Icons.hide_source_outlined),

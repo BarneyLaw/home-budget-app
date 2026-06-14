@@ -14,6 +14,7 @@ and show a safe-to-spend number before charts.
 - Transaction timeline with status filtering and review actions.
 - Demo notification capture pipeline with confidence scoring and duplicate
   handling.
+- Rule engine with user-created review rules and seeded merchant rules.
 - Basic recurring payment detection and actionable insights.
 - CSV export generation from the transaction ledger.
 - Dart platform-channel contract for Android notification listener integration.

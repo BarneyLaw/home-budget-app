@@ -100,6 +100,14 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                   },
                 ),
                 ListTile(
+                  leading: const Icon(Icons.auto_fix_high_outlined),
+                  title: const Text('Create rule and confirm'),
+                  onTap: () {
+                    controller.createRuleFromTransaction(id);
+                    Navigator.pop(context);
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.swap_horiz),
                   title: const Text('Mark as transfer'),
                   onTap: () {

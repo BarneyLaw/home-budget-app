@@ -7,6 +7,8 @@ import '../../insights/application/insight_generator.dart';
 import '../../insights/domain/insight.dart';
 import '../../recurring/application/recurring_detector.dart';
 import '../../recurring/domain/recurring_payment.dart';
+import '../../rules/application/rules_engine.dart';
+import '../../rules/domain/rule.dart';
 import '../../transactions/application/manual_entry_parser.dart';
 import '../../transactions/domain/budget_transaction.dart';
 import '../../transactions/domain/category.dart';
@@ -42,6 +44,7 @@ class BudgetState {
     required this.plan,
     required this.categories,
     required this.transactions,
+    required this.rules,
     required this.quickEntryText,
     this.lastImportMessage,
   });
@@ -49,6 +52,7 @@ class BudgetState {
   final BudgetPlan plan;
   final List<SpendingCategory> categories;
   final List<BudgetTransaction> transactions;
+  final List<TransactionRule> rules;
   final String quickEntryText;
   final String? lastImportMessage;
 
@@ -79,6 +83,7 @@ class BudgetState {
     BudgetPlan? plan,
     List<SpendingCategory>? categories,
     List<BudgetTransaction>? transactions,
+    List<TransactionRule>? rules,
     String? quickEntryText,
     String? lastImportMessage,
   }) {
@@ -86,6 +91,7 @@ class BudgetState {
       plan: plan ?? this.plan,
       categories: categories ?? this.categories,
       transactions: transactions ?? this.transactions,
+      rules: rules ?? this.rules,
       quickEntryText: quickEntryText ?? this.quickEntryText,
       lastImportMessage: lastImportMessage ?? this.lastImportMessage,
     );
@@ -191,6 +197,29 @@ class BudgetStateController extends StateNotifier<BudgetState> {
       ),
     ];
 
+    final rules = [
+      TransactionRule(
+        id: 'rule-spotify-subscriptions',
+        name: 'Spotify is a subscription',
+        priority: 10,
+        condition: const RuleCondition(merchantContains: 'spotify'),
+        action: const RuleAction(categoryId: 'subscriptions'),
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      ),
+      TransactionRule(
+        id: 'rule-grab-transport',
+        name: 'Grab defaults to transport',
+        priority: 20,
+        condition: const RuleCondition(merchantContains: 'grab'),
+        action: const RuleAction(categoryId: 'transport'),
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ];
+
     return BudgetStateController(
       BudgetState(
         plan: BudgetPlan(
@@ -211,6 +240,7 @@ class BudgetStateController extends StateNotifier<BudgetState> {
         ),
         categories: categories,
         transactions: transactions,
+        rules: rules,
         quickEntryText: '',
       ),
     );
@@ -262,21 +292,23 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     }
 
     final now = DateTime.now();
-    final transaction = BudgetTransaction(
-      id: 'manual-${now.microsecondsSinceEpoch}',
-      amount: draft.amount,
-      direction: draft.direction,
-      merchantName: draft.merchantName,
-      categoryId: draft.categoryId,
-      accountId: 'cash',
-      occurredAt: now,
-      capturedAt: now,
-      sourceType: TransactionSourceType.manual,
-      confidence: 0.96,
-      status: TransactionStatus.confirmed,
-      notes: draft.notes,
-      createdAt: now,
-      updatedAt: now,
+    final transaction = _applyRules(
+      BudgetTransaction(
+        id: 'manual-${now.microsecondsSinceEpoch}',
+        amount: draft.amount,
+        direction: draft.direction,
+        merchantName: draft.merchantName,
+        categoryId: draft.categoryId,
+        accountId: 'cash',
+        occurredAt: now,
+        capturedAt: now,
+        sourceType: TransactionSourceType.manual,
+        confidence: 0.96,
+        status: TransactionStatus.confirmed,
+        notes: draft.notes,
+        createdAt: now,
+        updatedAt: now,
+      ),
     );
 
     state = state.copyWith(
@@ -321,6 +353,32 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     );
   }
 
+  void createRuleFromTransaction(String id) {
+    final transaction = state.transactions.firstWhere(
+      (item) => item.id == id,
+      orElse: () => throw StateError('Transaction not found: $id'),
+    );
+    final now = DateTime.now();
+    final category = state.categoryById(transaction.categoryId);
+    final merchantKey = transaction.merchantName.split(' ').first;
+    final rule = TransactionRule(
+      id: 'rule-${now.microsecondsSinceEpoch}',
+      name: '${transaction.merchantName} is ${category.name}',
+      priority: 30,
+      condition: RuleCondition(merchantContains: merchantKey),
+      action: RuleAction(categoryId: transaction.categoryId),
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    state = state.copyWith(
+      rules: [...state.rules, rule],
+      lastImportMessage: 'Rule created for ${transaction.merchantName}',
+    );
+    confirmTransaction(id);
+  }
+
   void simulateNotificationCapture() {
     const sample =
         'DBS: You have spent SGD 12.90 at GRAB SINGAPORE on card ending 1234.';
@@ -341,23 +399,26 @@ class BudgetStateController extends StateNotifier<BudgetState> {
             ? TransactionStatus.confirmed
             : TransactionStatus.needsReview;
 
-    final transaction = BudgetTransaction(
-      id: 'capture-${now.microsecondsSinceEpoch}',
-      amount: parsed.amount,
-      direction: parsed.direction,
-      merchantName: parsed.merchantName,
-      categoryId: parsed.categoryId,
-      accountId: 'dbs-card',
-      occurredAt: now,
-      capturedAt: now,
-      sourceType: TransactionSourceType.notification,
-      sourceApp: 'DBS',
-      rawSourceId: 'demo-notification',
-      confidence: duplicate != null ? 0.98 : parsed.confidence,
-      status: status,
-      notes: duplicate != null ? 'Likely duplicate of ${duplicate.id}' : sample,
-      createdAt: now,
-      updatedAt: now,
+    final transaction = _applyRules(
+      BudgetTransaction(
+        id: 'capture-${now.microsecondsSinceEpoch}',
+        amount: parsed.amount,
+        direction: parsed.direction,
+        merchantName: parsed.merchantName,
+        categoryId: parsed.categoryId,
+        accountId: 'dbs-card',
+        occurredAt: now,
+        capturedAt: now,
+        sourceType: TransactionSourceType.notification,
+        sourceApp: 'DBS',
+        rawSourceId: 'demo-notification',
+        confidence: duplicate != null ? 0.98 : parsed.confidence,
+        status: status,
+        notes:
+            duplicate != null ? 'Likely duplicate of ${duplicate.id}' : sample,
+        createdAt: now,
+        updatedAt: now,
+      ),
     );
 
     state = state.copyWith(
@@ -366,6 +427,10 @@ class BudgetStateController extends StateNotifier<BudgetState> {
           ? 'Captured as duplicate for review'
           : 'Captured ${transaction.merchantName}',
     );
+  }
+
+  BudgetTransaction _applyRules(BudgetTransaction transaction) {
+    return const RulesEngine().apply(transaction, state.rules);
   }
 
   BudgetTransaction? _findLikelyDuplicate({
