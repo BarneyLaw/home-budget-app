@@ -120,11 +120,41 @@ class _SafeToSpendCard extends StatelessWidget {
   }
 }
 
-class _QuickEntry extends StatelessWidget {
+class _QuickEntry extends StatefulWidget {
   const _QuickEntry({required this.controller, required this.state});
 
   final BudgetStateController controller;
   final BudgetState state;
+
+  @override
+  State<_QuickEntry> createState() => _QuickEntryState();
+}
+
+class _QuickEntryState extends State<_QuickEntry> {
+  late final TextEditingController _textController;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: widget.state.quickEntryText);
+  }
+
+  @override
+  void didUpdateWidget(covariant _QuickEntry oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.state.quickEntryText != _textController.text) {
+      _textController.text = widget.state.quickEntryText;
+      _textController.selection = TextSelection.collapsed(
+        offset: _textController.text.length,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,16 +165,13 @@ class _QuickEntry extends StatelessWidget {
           children: [
             Expanded(
               child: TextField(
-                controller: TextEditingController(text: state.quickEntryText)
-                  ..selection = TextSelection.collapsed(
-                    offset: state.quickEntryText.length,
-                  ),
+                controller: _textController,
                 decoration: const InputDecoration(
                   hintText: '4.80 kopi',
                   prefixIcon: Icon(Icons.add_card_outlined),
                 ),
                 textInputAction: TextInputAction.done,
-                onChanged: controller.setQuickEntryText,
+                onChanged: widget.controller.setQuickEntryText,
                 onSubmitted: (_) => _submit(context),
               ),
             ),
@@ -161,7 +188,7 @@ class _QuickEntry extends StatelessWidget {
   }
 
   void _submit(BuildContext context) {
-    final added = controller.addManualEntry();
+    final added = widget.controller.addManualEntry();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(added ? 'Transaction added' : 'Enter an amount')),
     );
