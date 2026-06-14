@@ -1,0 +1,102 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../budget/application/budget_state.dart';
+
+class SettingsScreen extends ConsumerWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(budgetStateProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        children: [
+          _SettingsGroup(
+            title: 'Capture',
+            children: [
+              SwitchListTile(
+                value: true,
+                onChanged: (_) {},
+                secondary: const Icon(Icons.notifications_active_outlined),
+                title: const Text('Notification access'),
+                subtitle: const Text('Android capture pipeline ready for native listener.'),
+              ),
+              SwitchListTile(
+                value: false,
+                onChanged: (_) {},
+                secondary: const Icon(Icons.mail_outline),
+                title: const Text('Gmail receipt scanning'),
+                subtitle: const Text('Planned email import source.'),
+              ),
+            ],
+          ),
+          _SettingsGroup(
+            title: 'Budget',
+            children: [
+              ListTile(
+                leading: const Icon(Icons.currency_exchange),
+                title: const Text('Currency'),
+                trailing: Text(state.plan.monthlyLimit.currency),
+              ),
+              ListTile(
+                leading: const Icon(Icons.category_outlined),
+                title: const Text('Categories'),
+                trailing: Text('${state.categories.length}'),
+              ),
+            ],
+          ),
+          _SettingsGroup(
+            title: 'Privacy',
+            children: const [
+              ListTile(
+                leading: Icon(Icons.lock_outline),
+                title: Text('App lock'),
+                trailing: Icon(Icons.chevron_right),
+              ),
+              ListTile(
+                leading: Icon(Icons.file_download_outlined),
+                title: Text('Export CSV'),
+                trailing: Icon(Icons.chevron_right),
+              ),
+              ListTile(
+                leading: Icon(Icons.delete_outline),
+                title: Text('Delete local data'),
+                trailing: Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+          ),
+          Card(
+            child: Column(children: children),
+          ),
+        ],
+      ),
+    );
+  }
+}
