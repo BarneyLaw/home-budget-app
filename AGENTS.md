@@ -53,6 +53,9 @@ a sandboxed container. These are the operating instructions for that agent.
   fork bombs or deliberate resource exhaustion, no tampering with running system
   services, no attempts to exfiltrate credentials or secrets, no disabling of
   logging or monitoring, no obfuscated or deliberately hidden changes.
+- **DO NOT try to access another repository other than what is currently already specified as the remote.**
+  No pushing or pulling another repo from the same github account (unless it 
+  is a program/library needed for development, which you may clone)
 ## Working norms
  
 - Commit early and often; uncommitted work may be lost if the session ends or the
