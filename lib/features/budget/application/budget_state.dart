@@ -72,6 +72,13 @@ class BudgetState {
         .toList();
   }
 
+  List<BudgetTransaction> get periodTransactions {
+    return confirmedTransactions.where((transaction) {
+      return !transaction.occurredAt.isBefore(plan.periodStart) &&
+          transaction.occurredAt.isBefore(plan.periodEnd);
+    }).toList();
+  }
+
   SpendingCategory categoryById(String id) {
     return categories.firstWhere(
       (category) => category.id == id,

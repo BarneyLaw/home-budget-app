@@ -21,9 +21,11 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     final transactions = state.transactions.where((transaction) {
       final queryMatches = _query.isEmpty ||
           transaction.merchantName.toLowerCase().contains(_query.toLowerCase());
-      final statusMatches = _status == 'all' || transaction.status.name == _status;
+      final statusMatches =
+          _status == 'all' || transaction.status.name == _status;
       return queryMatches && statusMatches;
-    }).toList();
+    }).toList()
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Transactions')),

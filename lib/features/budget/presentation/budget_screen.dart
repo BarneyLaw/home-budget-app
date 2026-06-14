@@ -52,7 +52,7 @@ class BudgetScreen extends ConsumerWidget {
           const SizedBox(height: 8),
           ...plan.categoryBudgets.map((budget) {
             final category = state.categoryById(budget.categoryId);
-            final spent = state.confirmedTransactions
+            final spent = state.periodTransactions
                 .where((transaction) =>
                     transaction.categoryId == budget.categoryId &&
                     transaction.direction == TransactionDirection.expense)
