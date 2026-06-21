@@ -47,6 +47,31 @@ The app uses seeded Riverpod state hydrated from a Drift local database. On web,
 Drift opens through `web/drift_worker.js` and `web/sqlite3.wasm`; on native
 Flutter targets it uses `drift_flutter`'s platform database opener.
 
+## Deferred Implementation Decisions
+
+### Drift Web Worker Artifact
+
+`web/drift_worker.js` is currently tracked so the checked-out app has the Drift
+web runtime asset needed by `flutter build web` and static hosting. It is a large
+generated JavaScript file compiled from `tool/drift_worker.dart`, not handwritten
+application code.
+
+Future cleanup:
+
+1. Stop tracking `web/drift_worker.js`.
+2. Add it to `.gitignore`.
+3. Keep `tool/drift_worker.dart` tracked as the source.
+4. Add a setup/build script that regenerates the worker:
+
+   ```sh
+   dart compile js tool/drift_worker.dart -O4 -o web/drift_worker.js
+   ```
+
+5. Update docs and CI so the worker is generated before web builds.
+
+This should be done as its own build/tooling PR so generated artifact handling is
+clear and reviewable.
+
 ## Tooling Note
 
 Flutter and Dart are available in the current container. Android SDK, Java,
