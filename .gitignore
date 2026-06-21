@@ -1,16 +1,88 @@
+# Dart / Flutter tool state
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
-.pub-cache/
 .pub/
+.pub-cache/
+
+# Generated build outputs
 build/
 coverage/
+out/
+dist/
 
-*.iml
-*.log
-*.tmp
+# Dependency overrides
+pubspec_overrides.yaml
 
-.DS_Store
+# Flutter web build outputs are covered by build/.
+# Keep the source/runtime web assets in web/ tracked, including:
+# - web/index.html
+# - web/manifest.json
+# - web/drift_worker.js
+# - web/sqlite3.wasm
+
+# Android local and generated files
+android/.gradle/
+android/captures/
+android/local.properties
+android/app/outputs/
+android/app/profile/
+android/app/release/
+android/key.properties
+*.jks
+*.keystore
+
+# iOS / macOS local generated files, for future platform scaffolds
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/App.framework
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Pods/
+ios/.symlinks/
+macos/Flutter/ephemeral/
+macos/Pods/
+macos/.symlinks/
+
+# Linux / Windows generated files, for future platform scaffolds
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# IDE and editor files
 .idea/
 .vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+*.rej
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.mobileprovision
+*.cer
+
+# Test and analysis artifacts
+test-results/
+reports/
