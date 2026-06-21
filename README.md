@@ -63,3 +63,16 @@ python3 -m http.server 8080 --directory build/web
 Android native compilation and verification still require an Android SDK,
 Java/Gradle, and a device or emulator. See `docs/implementation_status.md` for
 details.
+
+## Documentation
+
+- User guide: `docs/user_guide.md`
+- Developer guide: `docs/developer_guide.md`
+- Implementation status: `docs/implementation_status.md`
+- Contribution workflow: `CONTRIBUTING.md`
+
+## Contribution Workflow
+
+Work should happen on feature branches. Each feature is a PR-sized branch, and
+each logical change should be its own conventional commit. See
+`CONTRIBUTING.md` before making code changes.

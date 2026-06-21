@@ -58,8 +58,26 @@ a sandboxed container. These are the operating instructions for that agent.
   is a program/library needed for development, which you may clone)
 ## Working norms
  
+- Work on a task branch unless the user explicitly asks to work directly on
+  `main`. Branch names should use the prefixes in `CONTRIBUTING.md`, such as
+  `feat/`, `fix/`, `docs/`, `test/`, `refactor/`, `chore/`, `build/`, or `ci/`.
+- Treat each feature as a PR-sized unit of work. Do not combine unrelated
+  features, infrastructure changes, and documentation changes in one branch.
 - Commit early and often; uncommitted work may be lost if the session ends or the
   container restarts. Pushing to the remote is the only durable record.
+- Make each logical change its own commit. Good boundaries include one domain
+  rule, one parser change, one Drift schema change plus generated files, one UI
+  workflow, one test addition, or one documentation topic.
+- Use Conventional Commits, for example `feat: add transaction split action`,
+  `fix: parse notification merchant names`, or `docs: add developer guide`.
+- Run the relevant checks before committing. For Dart/Flutter changes, run
+  `dart format lib test tool`, `flutter analyze`, and `flutter test`. For
+  runnable app changes, also run `flutter build web` before handoff.
+- Push the branch and report the branch name, commit list, checks run, and any
+  checks that could not run because tooling is unavailable.
+- Do not squash, amend, or rewrite pushed history unless the user explicitly
+  approves that history rewrite.
+- Follow `CONTRIBUTING.md` for the complete branching, commit, and PR workflow.
 - Write clear commit messages describing what changed and why.
 - If you hit a blocker you cannot resolve (a genuinely unreachable resource, a
   missing permission that is intentional), document it in your output and continue
