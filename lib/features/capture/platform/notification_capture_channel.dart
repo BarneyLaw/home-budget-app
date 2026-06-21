@@ -15,7 +15,8 @@ class NotificationCaptureEvent {
   final String body;
   final DateTime receivedAt;
 
-  String get rawText => [title, body].where((part) => part.isNotEmpty).join(' ');
+  String get rawText =>
+      [title, body].where((part) => part.isNotEmpty).join(' ');
 
   factory NotificationCaptureEvent.fromMap(Map<dynamic, dynamic> value) {
     return NotificationCaptureEvent(

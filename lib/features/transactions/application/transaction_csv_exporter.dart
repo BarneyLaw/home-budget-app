@@ -30,7 +30,7 @@ class TransactionCsvExporter {
         return [
           transaction.id,
           transaction.occurredAt.toIso8601String(),
-          transaction.amount.amount.toStringAsFixed(2),
+          transaction.amount.toDecimalString(),
           transaction.amount.currency,
           transaction.direction.name,
           transaction.merchantName,

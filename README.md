@@ -8,23 +8,28 @@ and show a safe-to-spend number before charts.
 ## Current MVP Slice
 
 - Flutter app shell with Today, Transactions, Budget, Insights, and Settings.
+- Local Drift persistence with web SQLite worker/wasm assets.
 - Safe-to-spend dashboard driven by monthly budget, savings goal, fixed bills,
   cash buffer, and current spending pace.
 - Fast manual entry parser for text-style inputs such as `4.80 kopi`.
-- Transaction timeline with status filtering and review actions.
+- Transaction timeline with day grouping, search, filters, edit, category,
+  split, transfer, ignore, and duplicate-review actions.
+- Editable simple budget and category limits.
 - Demo notification capture pipeline with confidence scoring and duplicate
   handling.
 - Rule engine with user-created review rules and seeded merchant rules.
-- Basic recurring payment detection and actionable insights.
+- Basic recurring payment detection and actionable insights with one compact
+  category spend chart.
 - CSV export generation from the transaction ledger.
-- Dart platform-channel contract for Android notification listener integration.
+- Android scaffold with a native Kotlin notification listener bridge matching
+  the Dart platform-channel contract.
 
 ## Project Layout
 
 ```text
 lib/
   app/                    App shell, router, theme
-  core/                   Shared money/date primitives
+  core/                   Database, preferences, money/date primitives
   features/
     budget/               Budget plan and safe-to-spend logic
     capture/              Raw capture parsing pipeline
@@ -38,16 +43,23 @@ lib/
 
 ## Running Locally
 
-This repository contains the Flutter source files and tests. In an environment
-with Flutter installed:
+This repository contains a generated Flutter web scaffold and the source files
+for the app. In an environment with Flutter installed:
 
 ```sh
-flutter create .
 flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter analyze
 flutter test
-flutter run
+flutter build web
 ```
 
-The current execution container did not include `flutter` or `dart`, so those
-commands could not be run during this implementation session. See
-`docs/implementation_status.md` for the verification status and next steps.
+To serve the compiled web build:
+
+```sh
+python3 -m http.server 8080 --directory build/web
+```
+
+Android native compilation and verification still require an Android SDK,
+Java/Gradle, and a device or emulator. See `docs/implementation_status.md` for
+details.

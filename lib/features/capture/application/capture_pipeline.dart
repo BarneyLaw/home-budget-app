@@ -30,7 +30,7 @@ class CapturePipeline {
       return null;
     }
 
-    final amountMinor = (double.parse(amountMatch.group(1)!) * 100).round();
+    final amount = Money.fromDecimal(amountMatch.group(1)!);
     final lower = text.toLowerCase();
     final merchant = _merchantFromText(text);
     final isIncome = lower.contains('received') || lower.contains('credited');
@@ -45,7 +45,7 @@ class CapturePipeline {
     final confidence = merchant == 'Unknown merchant' ? 0.46 : 0.84;
 
     return ParsedCapture(
-      amount: Money(amountMinor),
+      amount: amount,
       currency: 'SGD',
       merchantName: merchant,
       direction: direction,
@@ -55,8 +55,10 @@ class CapturePipeline {
   }
 
   String _merchantFromText(String text) {
-    final atMatch = RegExp(r'\bat\s+([A-Z0-9 &.-]+?)(?:\s+on|\s*$)')
-        .firstMatch(text.toUpperCase());
+    final atMatch = RegExp(
+      r'\bat\s+([A-Z0-9 &.-]+?)(?:\s+on\s+card|\s+on\s+\d|\s*$)',
+      caseSensitive: false,
+    ).firstMatch(text.toUpperCase());
     if (atMatch != null) {
       return _titleCase(atMatch.group(1)!.trim());
     }

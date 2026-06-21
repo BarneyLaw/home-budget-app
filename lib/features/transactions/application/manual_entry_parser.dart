@@ -32,7 +32,7 @@ class ManualEntryParser {
     }
 
     final amountText = amountMatch.group(1)!;
-    final amount = (double.parse(amountText) * 100).round();
+    final amount = Money.fromDecimal(amountText);
     final remainder = trimmed.replaceFirst(amountText, '').trim();
     final lower = trimmed.toLowerCase();
     final direction = lower.startsWith('paid ') ||
@@ -46,7 +46,7 @@ class ManualEntryParser {
         .trim();
 
     return ManualEntryDraft(
-      amount: Money(amount),
+      amount: amount,
       merchantName: merchantName.isEmpty ? 'Manual entry' : merchantName,
       categoryId: _inferCategory(merchantName),
       direction: direction,

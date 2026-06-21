@@ -242,7 +242,8 @@ class _ReviewTile extends ConsumerWidget {
                 FilledButton.icon(
                   icon: const Icon(Icons.check),
                   label: const Text('Confirm'),
-                  onPressed: () => controller.confirmTransaction(transaction.id),
+                  onPressed: () =>
+                      controller.confirmTransaction(transaction.id),
                 ),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.swap_horiz),
@@ -286,11 +287,12 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sign = transaction.direction == TransactionDirection.income ? '+' : '';
+    final sign =
+        transaction.direction == TransactionDirection.income ? '+' : '';
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       leading: CircleAvatar(
-        backgroundColor: color.withOpacity(0.12),
+        backgroundColor: color.withValues(alpha: 0.12),
         child: Icon(Icons.payments_outlined, color: color),
       ),
       title: Text(transaction.merchantName),

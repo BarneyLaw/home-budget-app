@@ -43,7 +43,8 @@ class SafeToSpendCalculator {
     final todayStart = DateTime(now.year, now.month, now.day);
     final spentTodayMinor = periodTransactions
         .where((transaction) => !transaction.occurredAt.isBefore(todayStart))
-        .fold<int>(0, (sum, transaction) => sum + transaction.amount.minorUnits);
+        .fold<int>(
+            0, (sum, transaction) => sum + transaction.amount.minorUnits);
 
     final committedMinor = plan.savingsGoal.minorUnits +
         plan.fixedBills.minorUnits +

@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/database/app_database.dart';
 import '../../../core/money/money.dart';
+import '../../../core/preferences/app_preferences.dart';
 import '../../capture/application/capture_pipeline.dart';
 import '../../insights/application/insight_generator.dart';
 import '../../insights/domain/insight.dart';
@@ -12,12 +16,27 @@ import '../../rules/domain/rule.dart';
 import '../../transactions/application/manual_entry_parser.dart';
 import '../../transactions/domain/budget_transaction.dart';
 import '../../transactions/domain/category.dart';
+import '../data/local_budget_store.dart';
 import '../domain/budget_plan.dart';
 import 'safe_to_spend_calculator.dart';
 
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  final database = AppDatabase.defaults();
+  ref.onDispose(database.close);
+  return database;
+});
+
+final localBudgetStoreProvider = Provider<LocalBudgetStore>((ref) {
+  return LocalBudgetStore(ref.watch(appDatabaseProvider));
+});
+
 final budgetStateProvider =
     StateNotifierProvider<BudgetStateController, BudgetState>((ref) {
-  return BudgetStateController.seeded();
+  final controller = BudgetStateController.seeded(
+    store: ref.watch(localBudgetStoreProvider),
+  );
+  unawaited(controller.hydrate());
+  return controller;
 });
 
 final safeToSpendProvider = Provider<SafeToSpendResult>((ref) {
@@ -45,6 +64,7 @@ class BudgetState {
     required this.categories,
     required this.transactions,
     required this.rules,
+    required this.preferences,
     required this.quickEntryText,
     this.lastImportMessage,
   });
@@ -53,6 +73,7 @@ class BudgetState {
   final List<SpendingCategory> categories;
   final List<BudgetTransaction> transactions;
   final List<TransactionRule> rules;
+  final AppPreferences preferences;
   final String quickEntryText;
   final String? lastImportMessage;
 
@@ -61,7 +82,11 @@ class BudgetState {
       .toList();
 
   List<BudgetTransaction> get reviewTransactions => transactions
-      .where((transaction) => transaction.status == TransactionStatus.needsReview)
+      .where(
+        (transaction) =>
+            transaction.status == TransactionStatus.needsReview ||
+            transaction.status == TransactionStatus.duplicate,
+      )
       .toList();
 
   List<BudgetTransaction> get todayTransactions {
@@ -91,6 +116,7 @@ class BudgetState {
     List<SpendingCategory>? categories,
     List<BudgetTransaction>? transactions,
     List<TransactionRule>? rules,
+    AppPreferences? preferences,
     String? quickEntryText,
     String? lastImportMessage,
   }) {
@@ -99,16 +125,46 @@ class BudgetState {
       categories: categories ?? this.categories,
       transactions: transactions ?? this.transactions,
       rules: rules ?? this.rules,
+      preferences: preferences ?? this.preferences,
       quickEntryText: quickEntryText ?? this.quickEntryText,
       lastImportMessage: lastImportMessage ?? this.lastImportMessage,
+    );
+  }
+
+  LocalBudgetSnapshot toSnapshot() {
+    return LocalBudgetSnapshot(
+      plan: plan,
+      categories: categories,
+      transactions: transactions,
+      rules: rules,
+      preferences: preferences,
+    );
+  }
+
+  factory BudgetState.fromSnapshot(
+    LocalBudgetSnapshot snapshot, {
+    String quickEntryText = '',
+    String? lastImportMessage,
+  }) {
+    return BudgetState(
+      plan: snapshot.plan,
+      categories: snapshot.categories,
+      transactions: snapshot.transactions,
+      rules: snapshot.rules,
+      preferences: snapshot.preferences,
+      quickEntryText: quickEntryText,
+      lastImportMessage: lastImportMessage,
     );
   }
 }
 
 class BudgetStateController extends StateNotifier<BudgetState> {
-  BudgetStateController(super.state);
+  BudgetStateController(super.state, {LocalBudgetStore? store})
+      : _store = store;
 
-  factory BudgetStateController.seeded() {
+  final LocalBudgetStore? _store;
+
+  factory BudgetStateController.seeded({LocalBudgetStore? store}) {
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month);
     final nextMonth = DateTime(now.year, now.month + 1);
@@ -248,8 +304,10 @@ class BudgetStateController extends StateNotifier<BudgetState> {
         categories: categories,
         transactions: transactions,
         rules: rules,
+        preferences: const AppPreferences(onboardingComplete: true),
         quickEntryText: '',
       ),
+      store: store,
     );
   }
 
@@ -288,6 +346,25 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     );
   }
 
+  Future<void> hydrate() async {
+    final store = _store;
+    if (store == null) {
+      return;
+    }
+
+    await store.seedIfEmpty(state.toSnapshot());
+    final snapshot = await store.loadSnapshot();
+    if (snapshot == null || !mounted) {
+      return;
+    }
+
+    state = BudgetState.fromSnapshot(
+      snapshot,
+      quickEntryText: state.quickEntryText,
+      lastImportMessage: 'Loaded local budget',
+    );
+  }
+
   void setQuickEntryText(String value) {
     state = state.copyWith(quickEntryText: value);
   }
@@ -299,6 +376,11 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     }
 
     final now = DateTime.now();
+    final duplicate = _findLikelyDuplicate(
+      merchantName: draft.merchantName,
+      amount: draft.amount,
+      occurredAt: now,
+    );
     final transaction = _applyRules(
       BudgetTransaction(
         id: 'manual-${now.microsecondsSinceEpoch}',
@@ -311,8 +393,12 @@ class BudgetStateController extends StateNotifier<BudgetState> {
         capturedAt: now,
         sourceType: TransactionSourceType.manual,
         confidence: 0.96,
-        status: TransactionStatus.confirmed,
-        notes: draft.notes,
+        status: duplicate == null
+            ? TransactionStatus.confirmed
+            : TransactionStatus.duplicate,
+        notes: duplicate == null
+            ? draft.notes
+            : 'Likely duplicate of ${duplicate.merchantName}. Original: ${draft.notes}',
         createdAt: now,
         updatedAt: now,
       ),
@@ -321,8 +407,11 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     state = state.copyWith(
       transactions: [transaction, ...state.transactions],
       quickEntryText: '',
-      lastImportMessage: 'Added ${transaction.merchantName}',
+      lastImportMessage: duplicate == null
+          ? 'Added ${transaction.merchantName}'
+          : 'Possible duplicate needs review',
     );
+    _persistSnapshot();
     return true;
   }
 
@@ -360,6 +449,106 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     );
   }
 
+  void changeTransactionCategory(String id, String categoryId) {
+    _updateTransaction(
+      id,
+      (transaction) => transaction.copyWith(
+        categoryId: categoryId,
+        confidence: 1,
+        status: TransactionStatus.confirmed,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  void updateTransactionDetails({
+    required String id,
+    Money? amount,
+    String? merchantName,
+    String? categoryId,
+    DateTime? occurredAt,
+    String? notes,
+  }) {
+    _updateTransaction(
+      id,
+      (transaction) => transaction.copyWith(
+        amount: amount,
+        merchantName: merchantName,
+        categoryId: categoryId,
+        occurredAt: occurredAt,
+        notes: notes,
+        confidence: 1,
+        status: TransactionStatus.confirmed,
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  bool splitTransaction({
+    required String id,
+    required Money firstAmount,
+    required String firstCategoryId,
+    required String secondCategoryId,
+  }) {
+    BudgetTransaction? original;
+    for (final transaction in state.transactions) {
+      if (transaction.id == id) {
+        original = transaction;
+        break;
+      }
+    }
+    if (original == null ||
+        firstAmount.minorUnits <= 0 ||
+        firstAmount.minorUnits >= original.amount.minorUnits) {
+      return false;
+    }
+
+    final now = DateTime.now();
+    final secondAmount = Money(
+      original.amount.minorUnits - firstAmount.minorUnits,
+      currency: original.amount.currency,
+    );
+    final first = original.copyWith(
+      amount: firstAmount,
+      categoryId: firstCategoryId,
+      notes: _appendNote(original.notes, 'Split part 1'),
+      confidence: 1,
+      status: TransactionStatus.confirmed,
+      updatedAt: now,
+    );
+    final second = original.copyWith(
+      id: '${original.id}-split-${now.microsecondsSinceEpoch}',
+      amount: secondAmount,
+      categoryId: secondCategoryId,
+      notes: _appendNote(original.notes, 'Split part 2'),
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    state = state.copyWith(
+      transactions: [
+        for (final transaction in state.transactions)
+          if (transaction.id == id) first else transaction,
+        second,
+      ]..sort((a, b) => b.occurredAt.compareTo(a.occurredAt)),
+      lastImportMessage: 'Transaction split',
+    );
+    _persistSnapshot();
+    return true;
+  }
+
+  void mergeDuplicate(String id) {
+    _updateTransaction(
+      id,
+      (transaction) => transaction.copyWith(
+        status: TransactionStatus.ignored,
+        notes:
+            _appendNote(transaction.notes, 'Merged into existing transaction'),
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
   void createRuleFromTransaction(String id) {
     final transaction = state.transactions.firstWhere(
       (item) => item.id == id,
@@ -383,6 +572,7 @@ class BudgetStateController extends StateNotifier<BudgetState> {
       rules: [...state.rules, rule],
       lastImportMessage: 'Rule created for ${transaction.merchantName}',
     );
+    _persistRule(rule);
     confirmTransaction(id);
   }
 
@@ -434,6 +624,65 @@ class BudgetStateController extends StateNotifier<BudgetState> {
           ? 'Captured as duplicate for review'
           : 'Captured ${transaction.merchantName}',
     );
+    _persistSnapshot();
+  }
+
+  void updatePlan({
+    Money? monthlyLimit,
+    Money? savingsGoal,
+    Money? cashBuffer,
+    Money? fixedBills,
+    BudgetMode? mode,
+  }) {
+    state = state.copyWith(
+      plan: state.plan.copyWith(
+        monthlyLimit: monthlyLimit,
+        savingsGoal: savingsGoal,
+        cashBuffer: cashBuffer,
+        fixedBills: fixedBills,
+        mode: mode,
+      ),
+      lastImportMessage: 'Budget updated',
+    );
+    _persistSnapshot();
+  }
+
+  void updateCategoryBudget(String categoryId, Money limit) {
+    final budgets = [
+      for (final budget in state.plan.categoryBudgets)
+        if (budget.categoryId == categoryId)
+          budget.copyWith(limit: limit)
+        else
+          budget,
+    ];
+    final hasBudget = budgets.any((budget) => budget.categoryId == categoryId);
+    state = state.copyWith(
+      plan: state.plan.copyWith(
+        categoryBudgets: hasBudget
+            ? budgets
+            : [
+                ...budgets,
+                CategoryBudget(categoryId: categoryId, limit: limit)
+              ],
+      ),
+      lastImportMessage: 'Category budget updated',
+    );
+    _persistSnapshot();
+  }
+
+  void updatePreferences(AppPreferences preferences) {
+    state = state.copyWith(preferences: preferences);
+    _persistPreferences();
+  }
+
+  Future<void> resetLocalData() async {
+    final seeded = BudgetStateController.seeded(store: _store).state;
+    state = seeded.copyWith(lastImportMessage: 'Local data reset');
+    final store = _store;
+    if (store != null) {
+      await store.clearUserData();
+      await store.saveSnapshot(state.toSnapshot());
+    }
   }
 
   BudgetTransaction _applyRules(BudgetTransaction transaction) {
@@ -463,11 +712,53 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     String id,
     BudgetTransaction Function(BudgetTransaction transaction) update,
   ) {
+    BudgetTransaction? updatedTransaction;
     state = state.copyWith(
       transactions: [
         for (final transaction in state.transactions)
-          if (transaction.id == id) update(transaction) else transaction,
+          if (transaction.id == id)
+            updatedTransaction = update(transaction)
+          else
+            transaction,
       ],
     );
+    if (updatedTransaction != null) {
+      _persistTransaction(updatedTransaction);
+    }
+  }
+
+  String _appendNote(String? existing, String note) {
+    if (existing == null || existing.isEmpty) {
+      return note;
+    }
+    return '$existing; $note';
+  }
+
+  void _persistSnapshot() {
+    final store = _store;
+    if (store != null) {
+      unawaited(store.saveSnapshot(state.toSnapshot()));
+    }
+  }
+
+  void _persistTransaction(BudgetTransaction transaction) {
+    final store = _store;
+    if (store != null) {
+      unawaited(store.saveTransaction(transaction));
+    }
+  }
+
+  void _persistRule(TransactionRule rule) {
+    final store = _store;
+    if (store != null) {
+      unawaited(store.saveRule(rule));
+    }
+  }
+
+  void _persistPreferences() {
+    final store = _store;
+    if (store != null) {
+      unawaited(store.savePreferences(state.preferences));
+    }
   }
 }

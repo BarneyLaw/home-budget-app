@@ -10,6 +10,16 @@ class CategoryBudget {
 
   final String categoryId;
   final Money limit;
+
+  CategoryBudget copyWith({
+    String? categoryId,
+    Money? limit,
+  }) {
+    return CategoryBudget(
+      categoryId: categoryId ?? this.categoryId,
+      limit: limit ?? this.limit,
+    );
+  }
 }
 
 class BudgetPlan {
@@ -34,4 +44,28 @@ class BudgetPlan {
   final List<CategoryBudget> categoryBudgets;
   final DateTime periodStart;
   final DateTime periodEnd;
+
+  BudgetPlan copyWith({
+    String? id,
+    BudgetMode? mode,
+    Money? monthlyLimit,
+    Money? savingsGoal,
+    Money? cashBuffer,
+    Money? fixedBills,
+    List<CategoryBudget>? categoryBudgets,
+    DateTime? periodStart,
+    DateTime? periodEnd,
+  }) {
+    return BudgetPlan(
+      id: id ?? this.id,
+      mode: mode ?? this.mode,
+      monthlyLimit: monthlyLimit ?? this.monthlyLimit,
+      savingsGoal: savingsGoal ?? this.savingsGoal,
+      cashBuffer: cashBuffer ?? this.cashBuffer,
+      fixedBills: fixedBills ?? this.fixedBills,
+      categoryBudgets: categoryBudgets ?? this.categoryBudgets,
+      periodStart: periodStart ?? this.periodStart,
+      periodEnd: periodEnd ?? this.periodEnd,
+    );
+  }
 }

@@ -4,7 +4,13 @@ enum TransactionDirection { expense, income, transfer }
 
 enum TransactionSourceType { notification, email, manual, import, api }
 
-enum TransactionStatus { confirmed, needsReview, ignored, duplicate }
+enum TransactionStatus {
+  confirmed,
+  needsReview,
+  ignored,
+  duplicate,
+  pendingSync
+}
 
 class BudgetTransaction {
   const BudgetTransaction({
