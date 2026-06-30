@@ -170,14 +170,12 @@ class EncryptedBackupService {
   }
 
   SpendingCategory _categoryFromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
     return SpendingCategory(
-      id: json['id'] as String,
+      id: id,
       name: json['name'] as String,
       color: Color(json['colorValue'] as int),
-      icon: IconData(
-        json['iconCodePoint'] as int,
-        fontFamily: 'MaterialIcons',
-      ),
+      icon: _iconForCategory(id),
     );
   }
 
@@ -291,5 +289,15 @@ class EncryptedBackupService {
         (color.r * 255).round() << 16 |
         (color.g * 255).round() << 8 |
         (color.b * 255).round();
+  }
+
+  IconData _iconForCategory(String id) {
+    return switch (id) {
+      'food' => Icons.restaurant_outlined,
+      'transport' => Icons.directions_car_outlined,
+      'subscriptions' => Icons.autorenew_outlined,
+      'shopping' => Icons.shopping_bag_outlined,
+      _ => Icons.more_horiz,
+    };
   }
 }
