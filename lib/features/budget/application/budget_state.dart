@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/money/money.dart';
 import '../../../core/preferences/app_preferences.dart';
+import '../../backup/application/encrypted_backup_service.dart';
 import '../../capture/application/capture_pipeline.dart';
+import '../../capture/application/email_receipt_parser.dart';
 import '../../insights/application/insight_generator.dart';
 import '../../insights/domain/insight.dart';
 import '../../recurring/application/recurring_detector.dart';
@@ -704,6 +706,83 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     _persistSnapshot();
   }
 
+  bool importEmailReceipt(String rawEmail) {
+    if (!state.preferences.emailScanningEnabled) {
+      state = state.copyWith(
+        lastImportMessage: 'Turn on Gmail receipt scanning first',
+      );
+      return false;
+    }
+
+    final parsed = const EmailReceiptParser().parse(rawEmail);
+    if (parsed == null) {
+      state = state.copyWith(lastImportMessage: 'Could not parse receipt');
+      return false;
+    }
+
+    final now = DateTime.now();
+    final duplicate = _findLikelyDuplicate(
+      merchantName: parsed.merchantName,
+      amount: parsed.amount,
+      occurredAt: parsed.occurredAt,
+    );
+    final transaction = _applyRules(
+      BudgetTransaction(
+        id: 'email-${now.microsecondsSinceEpoch}',
+        amount: parsed.amount,
+        direction: TransactionDirection.expense,
+        merchantName: parsed.merchantName,
+        categoryId: parsed.categoryId,
+        accountId: 'email-receipts',
+        occurredAt: parsed.occurredAt,
+        capturedAt: now,
+        sourceType: TransactionSourceType.email,
+        sourceApp: 'Gmail',
+        rawSourceId: 'gmail-receipt',
+        confidence: duplicate == null ? parsed.confidence : 0.98,
+        status: duplicate == null
+            ? TransactionStatus.confirmed
+            : TransactionStatus.duplicate,
+        notes: duplicate == null
+            ? _emailNotes(rawEmail: rawEmail, summary: parsed.summary)
+            : _appendNote(
+                _emailNotes(rawEmail: rawEmail, summary: parsed.summary),
+                'Likely duplicate of ${duplicate.merchantName}',
+              ),
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    state = state.copyWith(
+      transactions: [transaction, ...state.transactions]
+        ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt)),
+      lastImportMessage: duplicate == null
+          ? 'Imported Gmail receipt from ${transaction.merchantName}'
+          : 'Gmail receipt flagged as duplicate',
+    );
+    _persistSnapshot();
+    return true;
+  }
+
+  int importDemoGmailReceipts() {
+    if (!state.preferences.emailScanningEnabled) {
+      state = state.copyWith(
+        lastImportMessage: 'Turn on Gmail receipt scanning first',
+      );
+      return 0;
+    }
+
+    var imported = 0;
+    for (final receipt in _demoGmailReceipts) {
+      if (importEmailReceipt(receipt)) {
+        imported++;
+      }
+    }
+    state = state.copyWith(lastImportMessage: 'Imported $imported receipts');
+    return imported;
+  }
+
   void updatePlan({
     Money? monthlyLimit,
     Money? savingsGoal,
@@ -760,6 +839,30 @@ class BudgetStateController extends StateNotifier<BudgetState> {
       await store.clearUserData();
       await store.saveSnapshot(state.toSnapshot());
     }
+  }
+
+  Future<String> exportEncryptedBackup(String passphrase) {
+    return const EncryptedBackupService().exportBackup(
+      snapshot: state.toSnapshot(),
+      passphrase: passphrase,
+    );
+  }
+
+  Future<bool> restoreEncryptedBackup({
+    required String payload,
+    required String passphrase,
+  }) async {
+    final snapshot = await const EncryptedBackupService().importBackup(
+      payload: payload,
+      passphrase: passphrase,
+    );
+    state = BudgetState.fromSnapshot(
+      snapshot,
+      quickEntryText: '',
+      lastImportMessage: 'Encrypted backup restored',
+    );
+    _persistSnapshot();
+    return true;
   }
 
   BudgetTransaction _applyRules(BudgetTransaction transaction) {
@@ -854,3 +957,20 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     }
   }
 }
+
+const _demoGmailReceipts = [
+  '''
+From: Grab Receipts <receipts@grab.com>
+Subject: Your receipt from Grab
+Date: 2026-06-14
+Total SGD 12.90
+Thanks for riding with Grab.
+''',
+  '''
+From: Coffee House <orders@coffeehouse.example>
+Subject: Receipt from Coffee House
+Order date: Jun 15, 2026
+Amount paid: \$8.40
+Thanks for ordering lunch with us.
+''',
+];

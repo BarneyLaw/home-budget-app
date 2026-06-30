@@ -1,8 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/preferences/app_preferences.dart';
 import '../../budget/application/budget_state.dart';
+import '../../transactions/application/monthly_report_pdf_exporter.dart';
 import '../../transactions/application/transaction_csv_exporter.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -43,7 +49,32 @@ class SettingsScreen extends ConsumerWidget {
                 },
                 secondary: const Icon(Icons.mail_outline),
                 title: const Text('Gmail receipt scanning'),
-                subtitle: const Text('Planned email import source.'),
+                subtitle:
+                    const Text('Parse pasted Gmail receipts into spending.'),
+              ),
+              ListTile(
+                enabled: preferences.emailScanningEnabled,
+                leading: const Icon(Icons.mark_email_read_outlined),
+                title: const Text('Paste Gmail receipt'),
+                subtitle: const Text('Import a receipt email body now.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: preferences.emailScanningEnabled
+                    ? () => _showEmailReceiptImport(context, controller)
+                    : null,
+              ),
+              ListTile(
+                enabled: preferences.emailScanningEnabled,
+                leading: const Icon(Icons.playlist_add_check_outlined),
+                title: const Text('Import demo Gmail receipts'),
+                subtitle: const Text('Runs the receipt parser with examples.'),
+                onTap: preferences.emailScanningEnabled
+                    ? () {
+                        final count = controller.importDemoGmailReceipts();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Imported $count receipts')),
+                        );
+                      }
+                    : null,
               ),
             ],
           ),
@@ -98,9 +129,29 @@ class SettingsScreen extends ConsumerWidget {
                   );
                 },
                 secondary: const Icon(Icons.cloud_sync_outlined),
-                title: const Text('Encrypted cloud backup'),
+                title: const Text('Encrypted backup'),
                 subtitle: const Text(
-                    'Backend sync contract is staged for a later service.'),
+                    'Create or restore passphrase-protected local backups.'),
+              ),
+              ListTile(
+                enabled: preferences.cloudSyncEnabled,
+                leading: const Icon(Icons.lock_outline),
+                title: const Text('Create encrypted backup'),
+                subtitle: const Text('Share or copy an encrypted snapshot.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: preferences.cloudSyncEnabled
+                    ? () => _showBackupExport(context, controller)
+                    : null,
+              ),
+              ListTile(
+                enabled: preferences.cloudSyncEnabled,
+                leading: const Icon(Icons.restore_page_outlined),
+                title: const Text('Restore encrypted backup'),
+                subtitle: const Text('Paste a backup and passphrase.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: preferences.cloudSyncEnabled
+                    ? () => _showBackupRestore(context, controller)
+                    : null,
               ),
               SwitchListTile(
                 value: preferences.rawEmailStorageEnabled,
@@ -148,9 +199,10 @@ class SettingsScreen extends ConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.file_download_outlined),
-                title: const Text('Export CSV'),
+                title: const Text('Export center'),
+                subtitle: const Text('Copy or share CSV and monthly PDF.'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showCsvExport(context, state),
+                onTap: () => _showExportCenter(context, state),
               ),
               const ListTile(
                 leading: Icon(Icons.security_outlined),
@@ -171,11 +223,139 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showCsvExport(BuildContext context, BudgetState state) {
+  void _showEmailReceiptImport(
+    BuildContext context,
+    BudgetStateController controller,
+  ) {
+    final receiptController = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Paste Gmail receipt'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: TextField(
+              controller: receiptController,
+              minLines: 8,
+              maxLines: 12,
+              decoration: const InputDecoration(
+                hintText:
+                    'Subject: Your receipt from Grab\nDate: 2026-06-14\nTotal SGD 12.90',
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final imported =
+                    controller.importEmailReceipt(receiptController.text);
+                Navigator.pop(dialogContext);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      imported
+                          ? 'Receipt imported'
+                          : 'Receipt was not imported',
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Import'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showExportCenter(BuildContext context, BudgetState state) {
     final csv = const TransactionCsvExporter().export(
       transactions: state.transactions,
       categories: state.categories,
     );
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              ListTile(
+                leading: const Icon(Icons.copy_outlined),
+                title: const Text('Copy CSV'),
+                subtitle: const Text('Copy ledger data to the clipboard.'),
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: csv));
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('CSV copied')),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.table_view_outlined),
+                title: const Text('Share CSV file'),
+                subtitle: const Text('Share or download the full ledger.'),
+                onTap: () async {
+                  await _shareBytes(
+                    context,
+                    bytes: Uint8List.fromList(utf8.encode(csv)),
+                    filename: 'pocketpulse-transactions.csv',
+                    mimeType: 'text/csv',
+                    title: 'PocketPulse transactions CSV',
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.picture_as_pdf_outlined),
+                title: const Text('Share monthly PDF'),
+                subtitle: const Text('Generate this month’s spending report.'),
+                onTap: () async {
+                  final bytes = await const MonthlyReportPdfExporter().export(
+                    plan: state.plan,
+                    transactions: state.transactions,
+                    categories: state.categories,
+                    generatedAt: DateTime.now(),
+                  );
+                  if (!context.mounted) {
+                    return;
+                  }
+                  await _shareBytes(
+                    context,
+                    bytes: bytes,
+                    filename:
+                        'pocketpulse-${DateFormat('yyyy-MM').format(state.plan.periodStart)}.pdf',
+                    mimeType: 'application/pdf',
+                    title: 'PocketPulse monthly PDF',
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.code_outlined),
+                title: const Text('Preview CSV text'),
+                subtitle: const Text('Inspect and select the export payload.'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showCsvPreview(context, csv);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showCsvPreview(BuildContext context, String csv) {
     showDialog<void>(
       context: context,
       builder: (context) {
@@ -183,9 +363,7 @@ class SettingsScreen extends ConsumerWidget {
           title: const Text('CSV export'),
           content: SizedBox(
             width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: SelectableText(csv),
-            ),
+            child: SingleChildScrollView(child: SelectableText(csv)),
           ),
           actions: [
             TextButton(
@@ -196,6 +374,191 @@ class SettingsScreen extends ConsumerWidget {
         );
       },
     );
+  }
+
+  void _showBackupExport(
+    BuildContext context,
+    BudgetStateController controller,
+  ) {
+    final passphraseController = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Create encrypted backup'),
+          content: TextField(
+            controller: passphraseController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Backup passphrase',
+              helperText: 'Use at least 8 characters.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                try {
+                  final backup = await controller.exportEncryptedBackup(
+                    passphraseController.text,
+                  );
+                  if (!dialogContext.mounted) {
+                    return;
+                  }
+                  Navigator.pop(dialogContext);
+                  _showBackupPayload(context, backup);
+                } on FormatException catch (error) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(error.message)),
+                  );
+                }
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showBackupPayload(BuildContext context, String backup) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Encrypted backup'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(child: SelectableText(backup)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: backup));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Backup copied')),
+                  );
+                }
+              },
+              child: const Text('Copy'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                await _shareBytes(
+                  dialogContext,
+                  bytes: Uint8List.fromList(utf8.encode(backup)),
+                  filename: 'pocketpulse-backup.json',
+                  mimeType: 'application/json',
+                  title: 'PocketPulse encrypted backup',
+                );
+              },
+              child: const Text('Share'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showBackupRestore(
+    BuildContext context,
+    BudgetStateController controller,
+  ) {
+    final passphraseController = TextEditingController();
+    final backupController = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Restore encrypted backup'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: passphraseController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Backup passphrase',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: backupController,
+                  minLines: 6,
+                  maxLines: 10,
+                  decoration: const InputDecoration(
+                    labelText: 'Encrypted backup JSON',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                try {
+                  await controller.restoreEncryptedBackup(
+                    payload: backupController.text,
+                    passphrase: passphraseController.text,
+                  );
+                  if (!dialogContext.mounted) {
+                    return;
+                  }
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Backup restored')),
+                  );
+                } on FormatException catch (error) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(error.message)),
+                  );
+                }
+              },
+              child: const Text('Restore'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _shareBytes(
+    BuildContext context, {
+    required Uint8List bytes,
+    required String filename,
+    required String mimeType,
+    required String title,
+  }) async {
+    final renderBox = context.findRenderObject() as RenderBox?;
+    await SharePlus.instance.share(
+      ShareParams(
+        title: title,
+        files: [XFile.fromData(bytes, mimeType: mimeType)],
+        fileNameOverrides: [filename],
+        downloadFallbackEnabled: true,
+        sharePositionOrigin: renderBox == null
+            ? null
+            : renderBox.localToGlobal(Offset.zero) & renderBox.size,
+      ),
+    );
+    if (context.mounted) {
+      Navigator.pop(context);
+    }
   }
 
   void _confirmReset(
