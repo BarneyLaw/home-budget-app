@@ -18,6 +18,7 @@ import '../../transactions/domain/budget_transaction.dart';
 import '../../transactions/domain/category.dart';
 import '../data/local_budget_store.dart';
 import '../domain/budget_plan.dart';
+import 'budget_forecast.dart';
 import 'safe_to_spend_calculator.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -42,6 +43,15 @@ final budgetStateProvider =
 final safeToSpendProvider = Provider<SafeToSpendResult>((ref) {
   final state = ref.watch(budgetStateProvider);
   return const SafeToSpendCalculator().calculate(
+    plan: state.plan,
+    transactions: state.transactions,
+    now: DateTime.now(),
+  );
+});
+
+final budgetForecastProvider = Provider<BudgetForecastResult>((ref) {
+  final state = ref.watch(budgetStateProvider);
+  return const BudgetForecastCalculator().calculate(
     plan: state.plan,
     transactions: state.transactions,
     now: DateTime.now(),
@@ -415,6 +425,67 @@ class BudgetStateController extends StateNotifier<BudgetState> {
     return true;
   }
 
+  bool addStructuredTransaction({
+    required Money amount,
+    required TransactionDirection direction,
+    required String merchantName,
+    required String categoryId,
+    required DateTime occurredAt,
+    String accountId = 'cash',
+    String? notes,
+    bool isRecurring = false,
+  }) {
+    final trimmedMerchant = merchantName.trim();
+    if (amount.minorUnits == 0 || trimmedMerchant.isEmpty) {
+      return false;
+    }
+
+    final now = DateTime.now();
+    final normalizedAmount = Money(
+      amount.minorUnits.abs(),
+      currency: amount.currency,
+    );
+    final duplicate = _findLikelyDuplicate(
+      merchantName: trimmedMerchant,
+      amount: normalizedAmount,
+      occurredAt: occurredAt,
+    );
+    final transaction = BudgetTransaction(
+      id: 'manual-${now.microsecondsSinceEpoch}',
+      amount: normalizedAmount,
+      direction: direction,
+      merchantName: trimmedMerchant,
+      categoryId: categoryId,
+      accountId: accountId,
+      occurredAt: occurredAt,
+      capturedAt: now,
+      sourceType: TransactionSourceType.manual,
+      confidence: 0.98,
+      status: duplicate == null
+          ? TransactionStatus.confirmed
+          : TransactionStatus.duplicate,
+      notes: duplicate == null
+          ? _cleanOptional(notes)
+          : _appendNote(
+              _cleanOptional(notes),
+              'Likely duplicate of ${duplicate.merchantName}',
+            ),
+      isRecurring: isRecurring,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    state = state.copyWith(
+      transactions: [transaction, ...state.transactions]
+        ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt)),
+      lastImportMessage: duplicate == null
+          ? 'Added ${transaction.merchantName}'
+          : 'Possible duplicate needs review',
+    );
+    _persistSnapshot();
+    return true;
+  }
+
   void confirmTransaction(String id) {
     _updateTransaction(
       id,
@@ -464,19 +535,25 @@ class BudgetStateController extends StateNotifier<BudgetState> {
   void updateTransactionDetails({
     required String id,
     Money? amount,
+    TransactionDirection? direction,
     String? merchantName,
     String? categoryId,
     DateTime? occurredAt,
+    String? accountId,
     String? notes,
+    bool? isRecurring,
   }) {
     _updateTransaction(
       id,
       (transaction) => transaction.copyWith(
         amount: amount,
+        direction: direction,
         merchantName: merchantName,
         categoryId: categoryId,
         occurredAt: occurredAt,
+        accountId: accountId,
         notes: notes,
+        isRecurring: isRecurring,
         confidence: 1,
         status: TransactionStatus.confirmed,
         updatedAt: DateTime.now(),
@@ -732,6 +809,21 @@ class BudgetStateController extends StateNotifier<BudgetState> {
       return note;
     }
     return '$existing; $note';
+  }
+
+  String? _cleanOptional(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String _emailNotes({required String rawEmail, required String summary}) {
+    if (state.preferences.rawEmailStorageEnabled) {
+      return rawEmail.trim();
+    }
+    return 'Email receipt: $summary';
   }
 
   void _persistSnapshot() {

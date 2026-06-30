@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/money/money.dart';
 import '../../budget/application/budget_state.dart';
+import '../application/monthly_report_pdf_exporter.dart';
 import '../domain/budget_transaction.dart';
 import '../domain/category.dart';
+import 'transaction_entry_sheet.dart';
 
 class TransactionsScreen extends ConsumerStatefulWidget {
   const TransactionsScreen({super.key});
@@ -19,6 +22,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   String _status = 'all';
   String _categoryId = 'all';
   String _source = 'all';
+  bool _sharingReport = false;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +45,29 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Transactions')),
+      appBar: AppBar(
+        title: const Text('Transactions'),
+        actions: [
+          IconButton(
+            tooltip: 'Share monthly PDF',
+            icon: _sharingReport
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: _sharingReport ? null : () => _shareMonthlyReport(state),
+          ),
+          IconButton(
+            tooltip: 'Add detailed transaction',
+            icon: const Icon(Icons.add_card_outlined),
+            onPressed: () => showTransactionEntrySheet(
+              context: context,
+              ref: ref,
+            ),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
@@ -90,6 +116,40 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _shareMonthlyReport(BudgetState state) async {
+    setState(() => _sharingReport = true);
+    try {
+      final bytes = await const MonthlyReportPdfExporter().export(
+        plan: state.plan,
+        transactions: state.transactions,
+        categories: state.categories,
+        generatedAt: DateTime.now(),
+      );
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename:
+            'pocketpulse-${DateFormat('yyyy-MM').format(state.plan.periodStart)}.pdf',
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Monthly PDF ready (${bytes.length} bytes)')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not generate the PDF report')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _sharingReport = false);
+      }
+    }
   }
 
   List<Widget> _groupedTransactionTiles(
@@ -250,7 +310,7 @@ class _TransactionCard extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: ListView(
             shrinkWrap: true,
@@ -268,14 +328,14 @@ class _TransactionCard extends ConsumerWidget {
                   title: const Text('Confirm'),
                   onTap: () {
                     controller.confirmTransaction(transaction.id);
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                   },
                 ),
               ListTile(
                 leading: const Icon(Icons.category_outlined),
                 title: const Text('Change category'),
                 onTap: () {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                   _showCategoryPicker(context, ref, transaction);
                 },
               ),
@@ -283,15 +343,19 @@ class _TransactionCard extends ConsumerWidget {
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('Edit details'),
                 onTap: () {
-                  Navigator.pop(context);
-                  _showEditDialog(context, ref, transaction);
+                  Navigator.pop(sheetContext);
+                  showTransactionEntrySheet(
+                    context: context,
+                    ref: ref,
+                    transaction: transaction,
+                  );
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.call_split_outlined),
                 title: const Text('Split transaction'),
                 onTap: () {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                   _showSplitDialog(context, ref, transaction);
                 },
               ),
@@ -300,7 +364,7 @@ class _TransactionCard extends ConsumerWidget {
                 title: const Text('Mark as transfer'),
                 onTap: () {
                   controller.markAsTransfer(transaction.id);
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                 },
               ),
               if (transaction.status == TransactionStatus.duplicate)
@@ -309,7 +373,7 @@ class _TransactionCard extends ConsumerWidget {
                   title: const Text('Merge duplicate'),
                   onTap: () {
                     controller.mergeDuplicate(transaction.id);
-                    Navigator.pop(context);
+                    Navigator.pop(sheetContext);
                   },
                 ),
               ListTile(
@@ -317,7 +381,7 @@ class _TransactionCard extends ConsumerWidget {
                 title: const Text('Ignore'),
                 onTap: () {
                   controller.ignoreTransaction(transaction.id);
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                 },
               ),
             ],
@@ -361,75 +425,6 @@ class _TransactionCard extends ConsumerWidget {
               ],
             ),
           ),
-        );
-      },
-    );
-  }
-
-  void _showEditDialog(
-    BuildContext context,
-    WidgetRef ref,
-    BudgetTransaction transaction,
-  ) {
-    final merchantController =
-        TextEditingController(text: transaction.merchantName);
-    final amountController =
-        TextEditingController(text: transaction.amount.toDecimalString());
-    final notesController =
-        TextEditingController(text: transaction.notes ?? '');
-    final controller = ref.read(budgetStateProvider.notifier);
-
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Edit transaction'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: merchantController,
-                decoration: const InputDecoration(labelText: 'Merchant'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: amountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Amount'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: notesController,
-                decoration: const InputDecoration(labelText: 'Notes'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                try {
-                  controller.updateTransactionDetails(
-                    id: transaction.id,
-                    merchantName: merchantController.text.trim().isEmpty
-                        ? transaction.merchantName
-                        : merchantController.text.trim(),
-                    amount: Money.fromDecimal(amountController.text),
-                    notes: notesController.text.trim(),
-                  );
-                  Navigator.pop(context);
-                } on FormatException {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter a valid amount')),
-                  );
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
         );
       },
     );

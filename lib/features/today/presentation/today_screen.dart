@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/money/money.dart';
 import '../../budget/application/budget_state.dart';
 import '../../transactions/domain/budget_transaction.dart';
+import '../../transactions/presentation/transaction_entry_sheet.dart';
 
 class TodayScreen extends ConsumerWidget {
   const TodayScreen({super.key});
@@ -20,6 +21,14 @@ class TodayScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('PocketPulse'),
         actions: [
+          IconButton(
+            tooltip: 'Add detailed transaction',
+            icon: const Icon(Icons.add_card_outlined),
+            onPressed: () => showTransactionEntrySheet(
+              context: context,
+              ref: ref,
+            ),
+          ),
           IconButton(
             tooltip: 'Capture demo notification',
             icon: const Icon(Icons.notifications_active_outlined),
@@ -46,7 +55,14 @@ class TodayScreen extends ConsumerWidget {
             message: safeToSpend.message,
           ),
           const SizedBox(height: 16),
-          _QuickEntry(controller: controller, state: state),
+          _QuickEntry(
+            controller: controller,
+            state: state,
+            onDetailedEntry: () => showTransactionEntrySheet(
+              context: context,
+              ref: ref,
+            ),
+          ),
           const SizedBox(height: 16),
           _SectionHeader(
             title: 'Needs review',
@@ -121,10 +137,15 @@ class _SafeToSpendCard extends StatelessWidget {
 }
 
 class _QuickEntry extends StatefulWidget {
-  const _QuickEntry({required this.controller, required this.state});
+  const _QuickEntry({
+    required this.controller,
+    required this.state,
+    required this.onDetailedEntry,
+  });
 
   final BudgetStateController controller;
   final BudgetState state;
+  final VoidCallback onDetailedEntry;
 
   @override
   State<_QuickEntry> createState() => _QuickEntryState();
@@ -180,6 +201,12 @@ class _QuickEntryState extends State<_QuickEntry> {
               tooltip: 'Add transaction',
               icon: const Icon(Icons.arrow_upward),
               onPressed: () => _submit(context),
+            ),
+            const SizedBox(width: 4),
+            IconButton.outlined(
+              tooltip: 'Open detailed entry',
+              icon: const Icon(Icons.tune_outlined),
+              onPressed: widget.onDetailedEntry,
             ),
           ],
         ),
