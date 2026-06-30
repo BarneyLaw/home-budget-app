@@ -20,18 +20,29 @@ MVP described in `flutter_budget_app_architecture.md`.
 - Transaction timeline grouped by day with search, category/source/status
   filters, edit, recategorize, split, transfer, ignore, and duplicate merge
   actions.
+- Structured transaction entry pop-out for amount, purpose/category, date,
+  quantity, payment method, description, direction, and recurring status.
 - Review inbox actions: confirm, ignore, mark as transfer, merge duplicate, and
   create a learning rule.
 - Editable monthly budget, savings goal, cash buffer, fixed bills, and category
   budgets.
+- Month pacing forecast with projected spend, discretionary money remaining,
+  and daily target guidance.
 - Review inbox rule creation for merchant-category learning.
 - Deterministic notification parsing demo for bank-style alerts.
+- Gmail receipt parser for pasted or demo email bodies behind the email scanning
+  preference.
 - Duplicate-aware manual entry and capture simulation.
 - Seeded rules and rule application for new manual/captured transactions.
 - Basic recurring payment detection.
 - Basic spending insights for small purchases and subscriptions, plus a compact
   category spending chart.
-- CSV export generation from the local transaction ledger.
+- CSV export generation from the local transaction ledger, including copy and
+  share/download destinations.
+- Shareable monthly PDF spending report generated from the current budget
+  period.
+- Passphrase-encrypted local backup export and restore for the full local
+  budget snapshot.
 - Freezed/json_serializable preferences model for tracking style, capture
   source toggles, app lock, cloud backup, and raw email storage choices.
 - Repository interfaces for the future Drift-backed budget and transaction
@@ -65,7 +76,10 @@ flutter build web
 
 1. Compile and device-test the Android notification listener once Android SDK
    tooling is available.
-2. Add Gmail OAuth and receipt parsing behind the existing email source toggle.
-3. Add encrypted backup/sync once a backend exists.
+2. Connect Gmail OAuth to the receipt parser once Google client registration is
+   available.
+3. Add backend sync for encrypted backups once a backend exists.
 4. Add browser or device-based manual QA once Chrome or Android tooling is
+   available.
+5. Add scheduled/background export reminders once notification scheduling is
    available.
